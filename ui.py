@@ -58,6 +58,7 @@ class App:
         top_frame.grid(row=0, column=0, sticky="ew")
         top_frame.columnconfigure(0, weight=1)
 
+        # main title label
         self.display_label = tk.Label(
             top_frame,
             text="Welcome to Learnflow\nPlease choose an option",
@@ -67,19 +68,44 @@ class App:
         )
         self.display_label.grid(row=0, column=0, sticky="w")
 
+        # summary box shows compact view of Goal/Skill/Session/Notes
+        self.summary_box = tk.Text(
+            top_frame,
+            height=4,
+            width=20,
+            wrap="word",
+            state="disabled",
+            font=("Arial", 10)
+        )
+        self.summary_box.grid(row=0, column=2, padx=(5, 5), sticky="n")
+
+        # clear button
         self.clear_button = tk.Button(
             top_frame, text="Clear", width=7, command=self.clear_entries
         )
-        self.clear_button.grid(row=0, column=1, sticky="e", padx=(0, 63))
+        self.clear_button.grid(row=0, column=1, sticky="w", padx=(5, 5))
 
         # attach a menubar for Save/Load/Exit/History
         self.build_menu()
 
         # --- Middle row: buttons for Goal/Skill/Session/Notes ---
-        side_frame = tk.Frame(main_frame)
-        side_frame.grid(row=1, column=0, sticky="w")
+        middle_frame = tk.Frame(main_frame)
+        middle_frame.grid(row=1, column=0, sticky="nsew", pady=10)
 
-        buttons_frame = tk.Frame(side_frame)
+        # image on the left
+        try:
+            self.image = tk.PhotoImage(file="images\\image2_50pc.png")
+            self.image_label = tk.Label(middle_frame, image=self.image)
+            self.image_label.pack(side="left", padx=(0, 15))
+        except Exception:
+            # fail gracefully if image not found
+            pass
+
+        # right frame with stacked buttons + log box
+        right_frame = tk.Frame(middle_frame)
+        right_frame.pack(side="left", anchor="n")
+
+        buttons_frame = tk.Frame(right_frame)
         buttons_frame.pack(side="left", anchor="n", padx=(0, 5))
 
         # create one button per EntryType
@@ -91,30 +117,33 @@ class App:
                 command=lambda t=et: self.on_add_or_edit_entry(t),
             ).pack(pady=2, anchor="w")
 
-        # optional image display beside the buttons
-        try:
-            self.image = tk.PhotoImage(file="images\\image2_50pc.png")
-            tk.Label(side_frame, image=self.image).pack(side="left", anchor="n")
-        except Exception:
-            # fail gracefully if image not found
-            pass
+        # --- Bottom row: ai input and responses output box ---
+        ai_frame = tk.Frame(main_frame)
+        ai_frame.grid(row=3, column=0, sticky="ew", pady=(5, 10))
 
-        # --- Bottom row: output box with scrollbar ---
-        output_frame = tk.Frame(main_frame)
-        output_frame.grid(row=2, column=0, sticky="ew", pady=10)
+        # input field for user prompt to AI (placeholder only)
+        self.ai_entry = tk.Entry(ai_frame, width=60)
+        self.ai_entry.insert(0, "Placeholder: Type here for AI (future integration)")
+        self.ai_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
-        scrollbar = tk.Scrollbar(output_frame)
-        scrollbar.pack(side="right", fill="y")
+        # send button (currently only echoes placeholder response)
+        self.ai_send_button = tk.Button(
+            ai_frame,
+            text="Send",
+            command=lambda: self.display_ai_response(self.ai_entry.get())
+        )
+        self.ai_send_button.pack(side="right")
 
-        self.output_box = tk.Text(
-            output_frame,
+        # output box for AI responses
+        self.ai_output_box = tk.Text(
+            main_frame,
             height=6,
             wrap="word",
-            state="disabled",
-            yscrollcommand=scrollbar.set,
+            state="normal"
         )
-        self.output_box.pack(side="left", fill="both", expand=True)
-        scrollbar.config(command=self.output_box.yview)
+        self.ai_output_box.insert("1.0", "Placeholder: AI responses will appear here (future integration)")
+        self.ai_output_box.config(state="disabled")
+        self.ai_output_box.grid(row=4, column=0, sticky="ew")
 
         # enforce minimum window size after widgets load
         self.root.update_idletasks()
@@ -134,11 +163,7 @@ class App:
         popup.title(title)
 
         # calculate centered popup position relative to root window
-        w, h = 300, 150
-        self.root.update_idletasks()
-        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (w // 2)
-        y = self.root.winfo_y() + (self.root.winfo_height() // 4) - (h // 2)
-        popup.geometry(f"{w}x{h}+{x}+{y}")
+        self.center_popup(popup, 300, 150)
 
         # add label + entry box
         tk.Label(popup, text=prompt, font=("Arial", 12)).pack(pady=10)
@@ -160,14 +185,15 @@ class App:
     def render_summary(self) -> None:
         """
         Render the latest entries (summary) in the bottom output box.
-        Only shows the most recent entry per type.
         """
         summary = self.service.summary()
-        self.output_box.config(state="normal")
-        self.output_box.delete("1.0", tk.END)
+
+        # update summary box
+        self.summary_box.config(state="normal")
+        self.summary_box.delete("1.0", tk.END)
         for val in summary.values():
-            self.output_box.insert(tk.END, f"{val}\n")
-        self.output_box.config(state="disabled")
+            self.summary_box.insert(tk.END, f"{val}\n")
+        self.summary_box.config(state="disabled")
 
     # ------------------- EVENT HANDLERS -------------------
     def on_add_or_edit_entry(self, entry_type: EntryType):
@@ -207,11 +233,22 @@ class App:
         """
         Clear all entries from the service and refresh display.
         """
-        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         self.service.clear()
         self.render_summary()
-        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         messagebox.showinfo("Cleared", "All entries have been cleared.")
+
+    def display_ai_response(self, user_input: str):
+        """
+        Display ai responses to user
+        """
+        if not user_input.strip():
+            return
+        self.ai_output_box.config(state="normal")
+        self.ai_output_box.insert(tk.END, f"You: {user_input}\n")
+        self.ai_output_box.insert(tk.END, "AI: (placeholder response)\n\n")
+        self.ai_output_box.config(state="disabled")
+        self.ai_output_box.see(tk.END)
+        self.ai_entry.delete(0, tk.END)
 
     # ------------------- MENU & FILE OPS -------------------
 
@@ -232,6 +269,16 @@ class App:
         
         self.root.config(menu=menubar)
 
+        # add Entries menu with entry-related actions
+        entries_menu = tk.Menu(menubar, tearoff=0)
+        entries_menu.add_command(label="Goal", command=lambda: self.on_add_or_edit_entry(EntryType.Goal))
+        entries_menu.add_command(label="Skill", command=lambda: self.on_add_or_edit_entry(EntryType.Skill))
+        entries_menu.add_command(label="Session", command=lambda: self.on_add_or_edit_entry(EntryType.Session))
+        entries_menu.add_command(label="Notes", command=lambda: self.on_add_or_edit_entry(EntryType.Notes))
+        entries_menu.add_separator()
+        entries_menu.add_command(label="Clear", command=self.clear_entries)
+        menubar.add_cascade(label="Entries", menu=entries_menu)
+
     def save_entries(self):
         """
         Save all current entries to a JSON file.
@@ -240,7 +287,6 @@ class App:
         - GoalLog → adds 'status'
         - ReflectionLog → keeps 'mood'
         """
-        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         file_path = filedialog.asksaveasfilename(
             defaultextension=".json", filetypes=[("JSON files", "*.json")]
         )
@@ -276,7 +322,6 @@ class App:
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(export_dict, f, indent=4)
 
-        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         messagebox.showinfo("Saved", f"Entries saved to {file_path}")
 
     def load_entries(self):
@@ -287,7 +332,6 @@ class App:
         - ReflectionLog if entry_type == 'Notes'
         - LearningLog otherwise
         """
-        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         file_path = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
         if not file_path:
             return
@@ -321,11 +365,9 @@ class App:
                     self.service._state.entries[etype].append(entry)
 
             self.render_summary()
-            self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
             messagebox.showinfo("Loaded", f"Entries loaded from {file_path}")
 
         except Exception as e:
-            self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
             messagebox.showerror("Error", f"Failed to load entries:\n{e}")
 
     def show_history(self):
@@ -392,7 +434,6 @@ class App:
         - GoalLog adds Status
         - ReflectionLog adds Mood
         """
-        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         file_path = filedialog.asksaveasfilename(
             defaultextension=".csv", filetypes=[("CSV files", "*.csv")]
         )
@@ -429,7 +470,6 @@ class App:
                         mood,
                         status
                     ])
-        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         messagebox.showinfo("Exported", f"Entries exported to {file_path}")
 
 
@@ -439,6 +479,7 @@ class App:
         """
         Run sentiment analysis on note text using TextBlob.
         Returns one of: "motivated", "stuck", or "neutral".
+        Polarity amounts chosen for simplicity.
         """
         blob = TextBlob(text)
         polarity = blob.sentiment.polarity
