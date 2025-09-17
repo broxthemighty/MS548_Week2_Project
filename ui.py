@@ -24,8 +24,9 @@ import tkinter as tk
 from tkinter import messagebox, filedialog   # standard Tkinter dialogs
 import json                                  # for save/load functionality
 from textblob import TextBlob                # sentiment analysis for Notes
-from domain import EntryType                 # entry type enumeration
 from service import LearnflowService         # service layer abstraction
+from domain import EntryType, GoalLog, ReflectionLog
+import csv
 
 
 class App:
@@ -164,43 +165,52 @@ class App:
         summary = self.service.summary()
         self.output_box.config(state="normal")
         self.output_box.delete("1.0", tk.END)
-        for key, val in summary.items():
-            self.output_box.insert(tk.END, f"{key}: {val}\n")
+        for val in summary.values():
+            self.output_box.insert(tk.END, f"{val}\n")
         self.output_box.config(state="disabled")
 
     # ------------------- EVENT HANDLERS -------------------
-
     def on_add_or_edit_entry(self, entry_type: EntryType):
         """
         Event handler for Goal/Skill/Session/Notes buttons.
         Steps:
             - Open custom popup for user input.
-            - If entry_type is Notes, analyze mood with TextBlob.
-            - Send entry (and optional mood) to service.
+            - If Goal → create a GoalLog (with status).
+            - If Notes → create a ReflectionLog (with mood analysis).
+            - Otherwise → use normal LearningLog via service.
             - Re-render summary output.
         """
         text = self.custom_input("Input", f"Enter your {entry_type.value}:")
-        if text:
-            # mood tagging only applies to Notes
-            mood = ""
-            if entry_type == EntryType.Notes:
-                mood = self.analyze_mood(text)
+        if not text:
+            return  # user canceled
 
-            # create entry via service
+        if entry_type == EntryType.Goal:
+            # Create a GoalLog entry with default status
+            goal_log = GoalLog(entry_type, text)
+            self.service._state.entries[entry_type].append(goal_log)
+            self.service.write_log(goal_log)
+
+        elif entry_type == EntryType.Notes:
+            # Create a ReflectionLog entry and run mood analysis
+            reflection_log = ReflectionLog(entry_type, text)
+            reflection_log.analyze_mood()
+            self.service._state.entries[entry_type].append(reflection_log)
+            self.service.write_log(reflection_log)
+
+        else:
+            # Fallback: use normal service method (LearningLog)
             self.service.set_entry(entry_type, text)
 
-            # if mood detected, update the last record directly
-            if mood:
-                self.service._state.entries[entry_type][-1].mood = mood
-
-            self.render_summary()
+        self.render_summary()
 
     def clear_entries(self) -> None:
         """
         Clear all entries from the service and refresh display.
         """
+        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         self.service.clear()
         self.render_summary()
+        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         messagebox.showinfo("Cleared", "All entries have been cleared.")
 
     # ------------------- MENU & FILE OPS -------------------
@@ -212,73 +222,124 @@ class App:
         menubar = tk.Menu(self.root)
 
         file_menu = tk.Menu(menubar, tearoff=0)
-        file_menu.add_command(label="Save", command=self.save_entries)
-        file_menu.add_command(label="Load", command=self.load_entries)
+        file_menu.add_command(label="Save", command=self.save_entries) # save data entries in json formatted file
+        file_menu.add_command(label="Load", command=self.load_entries) # load data entries in json formatted file
+        file_menu.add_command(label="Export CSV", command=self.export_csv)  # export history to Excel-readable format
         file_menu.add_command(label="View History", command=self.show_history)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.root.quit)
         menubar.add_cascade(label="File", menu=file_menu)
-
+        
         self.root.config(menu=menubar)
 
     def save_entries(self):
         """
-        Save current state entries to JSON file.
-        Uses the raw dict representation for simplicity.
+        Save all current entries to a JSON file.
+        Explicitly writes base attributes and subclass-specific ones.
+        - LearningLog → entry_type, text, timestamp, mood
+        - GoalLog → adds 'status'
+        - ReflectionLog → keeps 'mood'
         """
+        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
         file_path = filedialog.asksaveasfilename(
             defaultextension=".json", filetypes=[("JSON files", "*.json")]
         )
         if not file_path:
             return
 
-        # build a plain dict for serialization
-        export_dict = {
-            et.value: [log.__dict__ for log in logs]
-            for et, logs in self.service.snapshot().entries.items()
-        }
-        with open(file_path, "w") as f:
-            json.dump(export_dict, f, indent=2)
+        history = self.service.snapshot().entries
+
+        from domain import GoalLog, ReflectionLog
+
+        export_dict = {}
+
+        for et, logs in history.items():
+            if logs:
+                export_dict[et.value] = []
+                for rec in logs:
+                    # Base record dictionary
+                    record_dict = {
+                        "entry_type": et.value,
+                        "text": rec.text,
+                        "timestamp": rec.timestamp,
+                        "mood": getattr(rec, "mood", "")
+                    }
+
+                    # Add subclass-specific attributes
+                    if isinstance(rec, GoalLog):
+                        record_dict["status"] = rec.status
+                    elif isinstance(rec, ReflectionLog):
+                        record_dict["mood"] = rec.mood  # Ensure mood is present
+
+                    export_dict[et.value].append(record_dict)
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(export_dict, f, indent=4)
+
+        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
+        messagebox.showinfo("Saved", f"Entries saved to {file_path}")
 
     def load_entries(self):
         """
         Load entries from a JSON file.
-        Restores LearningLog objects from dictionaries.
+        Reconstructs the correct class type:
+        - GoalLog if 'status' field is present
+        - ReflectionLog if entry_type == 'Notes'
+        - LearningLog otherwise
         """
-        file_path = filedialog.askopenfilename(
-            defaultextension=".json", filetypes=[("JSON files", "*.json")]
-        )
+        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
+        file_path = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
         if not file_path:
             return
 
-        with open(file_path, "r") as f:
-            data = json.load(f)
+        from domain import GoalLog, ReflectionLog, LearningLog, EntryType
 
-        # rebuild logs into service
-        self.service.clear()
-        for key, records in data.items():
-            et = EntryType(key)
-            for rec in records:
-                log = self.service._state.entries[et]
-                log.append(
-                    # reconstruct LearningLog with timestamp + mood
-                    self.service._state.entries[et].__class__.__args__[0](  # type trick
-                        et, rec.get("text", ""), rec.get("timestamp", ""), rec.get("mood", "")
-                    )
-                )
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
-        self.render_summary()
+            # Reset current state before loading
+            self.service._state.entries = {e: [] for e in EntryType}
+
+            for etype_str, records in data.items():
+                etype = EntryType(etype_str)
+                for rec in records:
+                    text = rec.get("text", "")
+                    timestamp = rec.get("timestamp", "")
+                    mood = rec.get("mood", "")
+
+                    if "status" in rec:
+                        # Build GoalLog
+                        entry = GoalLog(etype, text, timestamp=timestamp, mood=mood, status=rec["status"])
+                    elif etype == EntryType.Notes:
+                        # Build ReflectionLog
+                        entry = ReflectionLog(etype, text, timestamp=timestamp, mood=mood)
+                    else:
+                        # Build base LearningLog
+                        entry = LearningLog(etype, text, timestamp=timestamp, mood=mood)
+
+                    self.service._state.entries[etype].append(entry)
+
+            self.render_summary()
+            self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
+            messagebox.showinfo("Loaded", f"Entries loaded from {file_path}")
+
+        except Exception as e:
+            self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
+            messagebox.showerror("Error", f"Failed to load entries:\n{e}")
 
     def show_history(self):
         """
         Display a popup window with the full history of all entries.
-        Lists every record with timestamp, text, and optional mood.
+        Derived classes display extra attributes:
+            - GoalLog → shows status
+            - ReflectionLog → shows mood
         """
         history = self.service.snapshot().entries
 
         popup = tk.Toplevel(self.root)
         popup.title("History Log")
-        popup.geometry("500x300")
+        self.center_popup(popup, 600, 400)
 
         scrollbar = tk.Scrollbar(popup)
         scrollbar.pack(side="right", fill="y")
@@ -291,14 +352,86 @@ class App:
             if records:
                 text_area.insert(tk.END, f"{etype.value}:\n")
                 for idx, rec in enumerate(records, 1):
-                    ts = rec.timestamp
-                    txt = rec.text
-                    mood = rec.mood
-                    mood_str = f" [Mood: {mood}]" if mood else ""
-                    text_area.insert(tk.END, f"  {idx}. {ts} — {txt}{mood_str}\n")
+                    line = f"  {idx}. [{rec.timestamp}] {rec.text}"
+
+                    # If record is a GoalLog, add status
+                    from domain import GoalLog, ReflectionLog
+                    if isinstance(rec, GoalLog):
+                        line += f" (Status: {rec.status})"
+
+                    # If record is a ReflectionLog, add mood
+                    elif isinstance(rec, ReflectionLog):
+                        if rec.mood:
+                            line += f" (Mood: {rec.mood})"
+
+                    text_area.insert(tk.END, line + "\n")
+
                 text_area.insert(tk.END, "\n")
 
         text_area.config(state="disabled")
+
+    def center_popup(self, popup, width, height):
+        """
+        Center any popup relative to the main app window.
+        """
+        self.root.update_idletasks()
+        main_x = self.root.winfo_x()
+        main_y = self.root.winfo_y()
+        main_w = self.root.winfo_width()
+        main_h = self.root.winfo_height()
+
+        pos_x = main_x + (main_w // 2) - (width // 2)
+        pos_y = main_y + (main_h // 2) - (height // 2)
+
+        popup.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
+
+    def export_csv(self):
+        """
+        Export all entries (history) to a CSV file.
+        Columns: EntryType, Timestamp, Text, Mood, Status
+        - GoalLog adds Status
+        - ReflectionLog adds Mood
+        """
+        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".csv", filetypes=[("CSV files", "*.csv")]
+        )
+        if not file_path:
+            return
+
+        history = self.service.snapshot().entries
+
+        from domain import GoalLog, ReflectionLog
+
+        with open(file_path, "w", newline="", encoding="utf-8") as f:
+            import csv
+            writer = csv.writer(f)
+
+            # Write header row
+            writer.writerow(["EntryType", "Timestamp", "Text", "Mood", "Status"])
+
+            # Write one row per log entry
+            for etype, records in history.items():
+                for rec in records:
+                    mood = rec.mood if hasattr(rec, "mood") else ""
+                    status = ""
+
+                    # Handle derived class specifics
+                    if isinstance(rec, GoalLog):
+                        status = rec.status
+                    elif isinstance(rec, ReflectionLog):
+                        mood = rec.mood  # ReflectionLog should always carry mood
+
+                    writer.writerow([
+                        etype.value,
+                        rec.timestamp,
+                        rec.text,
+                        mood,
+                        status
+                    ])
+        self.root.eval('tk::PlaceWindow %s center' % self.root.winfo_toplevel())
+        messagebox.showinfo("Exported", f"Entries exported to {file_path}")
+
 
     # ------------------- UTILITIES -------------------
 
@@ -309,9 +442,10 @@ class App:
         """
         blob = TextBlob(text)
         polarity = blob.sentiment.polarity
-        if polarity > 0.3:
+        if polarity > 0.3:      # positive sentiment
             return "motivated"
-        elif polarity < -0.3:
+        elif polarity < -0.3:   # negative sentiment
             return "stuck"
-        else:
+        else:                   # neutral sentiment
             return "neutral"
+            

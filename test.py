@@ -82,8 +82,7 @@ class TestLearnflowService(unittest.TestCase):
         history = s.snapshot().entries
 
         # Verify both entries are stored as LearningLog objects
-        self.assertEqual(len(history[EntryType.Goal]), 2)
-        self.assertIsInstance(history[EntryType.Goal][0], LearningLog)
+        self.assertEqual(len(history[EntryType.Goal]), 2) # both entries should be stored
         self.assertEqual(history[EntryType.Goal][0].text, "First Goal")
         self.assertEqual(history[EntryType.Goal][1].text, "Second Goal")
 

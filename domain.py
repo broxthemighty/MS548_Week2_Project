@@ -64,6 +64,48 @@ class LearningLog:
         mood_str = f" [Mood: {self.mood}]" if self.mood else ""
         return f"{self.entry_type.value}: {self.text}{mood_str}"
 
+@dataclass
+class GoalLog(LearningLog):
+    """
+    Derived class representing a learning goal.
+    Unique attributes:
+        - status: current state of the goal (planned, in-progress, done).
+    Unique methods:
+        - update_status(): change status string.
+    """
+    status: str = "planned"  # default status when created
+
+    def update_status(self, new_status: str) -> str:
+        """
+        Update goal status and return a confirmation string.
+        """
+        self.status = new_status
+        return f"Goal '{self.text}' updated to status: {new_status}"
+    
+
+@dataclass
+class ReflectionLog(LearningLog):
+    """
+    Derived class representing a reflective note.
+    Unique attributes:
+        - mood: sentiment analysis result (inherited from base).
+    Unique methods:
+        - analyze_mood(): run sentiment analysis (TextBlob).
+    """
+    def analyze_mood(self) -> str:
+        """
+        Analyze mood from text using TextBlob sentiment polarity.
+        Returns a label: motivated, stuck, or neutral.
+        """
+        from textblob import TextBlob  # imported here to avoid circular issues
+        polarity = TextBlob(self.text).sentiment.polarity
+        if polarity > 0.3:
+            self.mood = "motivated"
+        elif polarity < -0.3:
+            self.mood = "stuck"
+        else:
+            self.mood = "neutral"
+        return self.mood
 
 @dataclass
 class LearnflowState:
@@ -76,5 +118,5 @@ class LearnflowState:
       - Support OOP enhancements in Week 3 with derived classes.
     """
     entries: Dict[EntryType, List[LearningLog]] = field(
-        default_factory=lambda: {e: [] for e in EntryType}
+        default_factory=lambda: {e: [] for e in EntryType} # initialize dict with empty lists
     )

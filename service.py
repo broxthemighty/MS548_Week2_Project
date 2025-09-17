@@ -54,7 +54,7 @@ class LearnflowService:
         clean_text = (text or "").strip()
 
         # create new log record object
-        record = LearningLog(entry_type, clean_text)
+        record = LearningLog(entry_type, clean_text) # create a timestamped log entry
 
         # append to the appropriate list in state
         self._state.entries[entry_type].append(record)
@@ -106,12 +106,31 @@ class LearnflowService:
 
     # ------------------- PLACEHOLDERS (Future Features) -------------------
 
-    def write_log(self, record: LearningLog):
+    def write_log(self, record: "LearningLog"):
         """
-        Stub method to be implemented in Week 3.
-        Intended behavior:
-            - Append record.summary() to a plain text logfile.
-            - Provide a persistent text trail of all actions.
-        Currently does nothing (pass).
+        Append a log entry to a persistent text file (learnflow.log).
+        Subclass-aware:
+        - GoalLog → includes Status
+        - ReflectionLog → includes Mood
+        - LearningLog → base summary
         """
-        pass
+        from domain import GoalLog, ReflectionLog
+
+        log_file = "learnflow.log"
+
+        # Base summary always includes entry type and text
+        line = f"[{record.timestamp}] {record.entry_type.value}: {record.text}"
+
+        # Add subclass-specific info
+        if isinstance(record, GoalLog):
+            line += f" (Status: {record.status})"
+        elif isinstance(record, ReflectionLog):
+            if record.mood:
+                line += f" (Mood: {record.mood})"
+        elif record.mood:  # Base LearningLog may still carry a mood
+            line += f" (Mood: {record.mood})"
+
+        # Write line to logfile
+        with open(log_file, "a", encoding="utf-8") as f:
+            f.write(line + "\n")
+
