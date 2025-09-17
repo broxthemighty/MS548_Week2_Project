@@ -1,28 +1,117 @@
-# service.py
-from typing import Optional, Dict
-from copy import deepcopy
-from domain import EntryType, LearnflowState
+"""
+service.py
+Author: Matt Lindborg
+Course: MS548 - Advanced Programming Concepts and AI
+Assignment: Week 2 (prep for Week 3)
+Date: 9/17/2025
+
+Purpose:
+This file implements the "business logic" for Learnflow Base.
+The GUI (ui.py) delegates actions to this service layer.
+Key responsibilities:
+    - Add new learning entries (Goals, Skills, Sessions, Notes).
+    - Store entries as LearningLog objects (defined in domain.py).
+    - Provide summaries and history views for the GUI.
+    - Clear/reset all entries.
+    - Stub in hooks for logfile writing (Week 3 requirement).
+This keeps the GUI and data model decoupled, enabling future
+expansion (OOP classes, logfile persistence, AI integration).
+"""
+
+# --- Imports ---
+from typing import Optional, Dict         # Type hinting for clarity
+from copy import deepcopy                 # For safe state snapshot
+from domain import EntryType, LearnflowState, LearningLog  # Import domain model classes
+
 
 class LearnflowService:
+    """
+    The LearnflowService class encapsulates all non-UI functionality.
+    It operates on a LearnflowState object, which stores user data.
+    """
+
     def __init__(self, state: Optional[LearnflowState] = None):
+        """
+        Constructor initializes service with an existing state,
+        or creates a new empty LearnflowState if none provided.
+        """
         self._state = state or LearnflowState()
 
-    # Commands (mutate state)
+    # ------------------- COMMANDS (Mutate State) -------------------
+
     def set_entry(self, entry_type: EntryType, text: str) -> None:
-        self._state.entries[entry_type] = (text or "").strip()
+        """
+        Add a new entry to the state.
+        Input:
+            entry_type - The category of entry (Goal, Skill, Session, Notes).
+            text       - The user-provided content string.
+        Behavior:
+            - Creates a new LearningLog object.
+            - Appends it to the list for the given entry_type.
+            - Calls write_log() stub for future logfile integration.
+        """
+        # sanitize text (avoid storing None)
+        clean_text = (text or "").strip()
+
+        # create new log record object
+        record = LearningLog(entry_type, clean_text)
+
+        # append to the appropriate list in state
+        self._state.entries[entry_type].append(record)
+
+        # placeholder hook for Week 3 logfile writing
+        self.write_log(record)
 
     def clear(self) -> None:
+        """
+        Reset the entire state back to empty lists.
+        Useful for starting over without restarting the program.
+        """
         for k in self._state.entries:
-            self._state.entries[k] = ""
+            self._state.entries[k] = []
 
-    # Queries (read state)
+    # ------------------- QUERIES (Read State) -------------------
+
     def get_entry(self, entry_type: EntryType) -> str:
-        return self._state.entries[entry_type]
+        """
+        Retrieve the most recent entry for a given type.
+        Returns:
+            - The latest entry text if available.
+            - Empty string if no entries exist for this type.
+        """
+        if self._state.entries[entry_type]:
+            return self._state.entries[entry_type][-1].text
+        return ""
 
     def summary(self) -> Dict[str, str]:
-        # Return only non-empty entries as { "Goal": "...", ... }
-        return {e.value: v for e, v in self._state.entries.items() if v}
+        """
+        Build a dictionary summary of the most recent entries by type.
+        Returns:
+            { "Goal": "Finish Week 1", "Notes": "Felt motivated", ... }
+        Each value comes from the LearningLog.summary() method.
+        """
+        result = {}
+        for e, records in self._state.entries.items():
+            if records:  # only include if there is at least one record
+                result[e.value] = records[-1].summary()
+        return result
 
     def snapshot(self) -> LearnflowState:
-        # Safe copy for testing/inspection
+        """
+        Return a deep copy of the current LearnflowState.
+        This allows the GUI to display history safely without
+        risking accidental modification of the underlying data.
+        """
         return deepcopy(self._state)
+
+    # ------------------- PLACEHOLDERS (Future Features) -------------------
+
+    def write_log(self, record: LearningLog):
+        """
+        Stub method to be implemented in Week 3.
+        Intended behavior:
+            - Append record.summary() to a plain text logfile.
+            - Provide a persistent text trail of all actions.
+        Currently does nothing (pass).
+        """
+        pass
