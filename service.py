@@ -19,9 +19,10 @@ expansion (OOP classes, logfile persistence, AI integration).
 """
 
 # --- Imports ---
-from typing import Optional, Dict         # Type hinting for clarity
-from copy import deepcopy                 # For safe state snapshot
-from domain import EntryType, LearnflowState, LearningLog  # Import domain model classes
+from typing import Optional, Dict                          # type hinting for clarity
+from copy import deepcopy                                  # for safe state snapshot
+from domain import EntryType, LearnflowState, LearningLog  # import domain model classes
+from textblob import TextBlob                              # import for sentiment analysis
 
 
 class LearnflowService:
@@ -53,8 +54,20 @@ class LearnflowService:
         # sanitize text (avoid storing None)
         clean_text = (text or "").strip()
 
-        # create new log record object
-        record = LearningLog(entry_type, clean_text) # create a timestamped log entry
+        # analyze sentiment polarity of the user input
+        blob = TextBlob(clean_text)
+        polarity = blob.sentiment.polarity
+
+        # classify mood based on polarity value
+        if polarity > 0.3:
+            mood = "motivated"   # positive text
+        elif polarity < -0.3:
+            mood = "stuck"       # negative text
+        else:
+            mood = "neutral"     # neutral/factual text
+
+        # create new log record object with mood
+        record = LearningLog(entry_type, clean_text, mood=mood)
 
         # append to the appropriate list in state
         self._state.entries[entry_type].append(record)

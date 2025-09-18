@@ -28,6 +28,24 @@ from service import LearnflowService         # service layer abstraction
 from domain import EntryType, GoalLog, ReflectionLog
 import csv # excel file output
 
+class AutoScrollbar(tk.Scrollbar):
+    """
+    A scrollbar that hides itself when not needed.
+    Works only with grid geometry (not pack or place).
+    """
+    def set(self, lo, hi):
+        # hide scrollbar if the text fits entirely in the view
+        if float(lo) <= 0.0 and float(hi) >= 1.0:
+            self.grid_remove()
+        else:
+            self.grid()
+        super().set(lo, hi)
+
+    def pack(self, **kw):
+        raise tk.TclError("Use grid instead of pack with AutoScrollbar")
+
+    def place(self, **kw):
+        raise tk.TclError("Use grid instead of place with AutoScrollbar")
 
 class App:
     """
@@ -97,16 +115,32 @@ class App:
         )
         self.display_label.grid(row=0, column=0, sticky="w")
 
-        # summary box shows compact view of Goal/Skill/Session/Notes
+        # frame to hold summary text + scrollbar (so scrollbar can hide itself if not needed)
+        summary_container = tk.Frame(top_frame)
+        summary_container.grid(row=0, column=2, padx=(5, 5), sticky="n")
+
+        # auto-hiding vertical scrollbar for the summary box
+        summary_scroll = AutoScrollbar(summary_container, orient="vertical")
+        summary_scroll.grid(row=0, column=1, sticky="ns")
+
+        # summary text box with scrollbar attached
         self.summary_box = tk.Text(
-            top_frame,
+            summary_container,
             height=4,
             width=40,
             wrap="word",
             state="disabled",
-            font=default_font
+            font=default_font,
+            yscrollcommand=summary_scroll.set
         )
-        self.summary_box.grid(row=0, column=2, padx=(5, 5), sticky="n")
+        self.summary_box.grid(row=0, column=0, sticky="nsew")
+
+        # link scrollbar back to summary box
+        summary_scroll.config(command=self.summary_box.yview)
+
+        # allow the text box to expand properly inside the container
+        summary_container.rowconfigure(0, weight=1)
+        summary_container.columnconfigure(0, weight=1)
 
         # clear button
         self.clear_button = tk.Button(
@@ -186,18 +220,36 @@ class App:
         ai_output_frame = tk.Frame(main_frame)
         ai_output_frame.grid(row=4, column=0, sticky="w", pady=(2, 0))
 
-        # output box for AI responses
+        # container frame for AI output text + scrollbar
+        ai_output_container = tk.Frame(ai_output_frame)
+        ai_output_container.pack(fill="both", expand=True)
+
+        # auto-hiding vertical scrollbar for AI output
+        ai_scroll = AutoScrollbar(ai_output_container, orient="vertical")
+        ai_scroll.grid(row=0, column=1, sticky="ns")
+
+        # AI output text box with scrollbar attached
         self.ai_output_box = tk.Text(
-            ai_output_frame,
+            ai_output_container,
             width=86,
             height=6,
             wrap="word",
             state="normal",
-            font=default_font
+            font=default_font,
+            yscrollcommand=ai_scroll.set
         )
+        self.ai_output_box.grid(row=0, column=0, sticky="nsew")
+
+        # insert placeholder text at start
         self.ai_output_box.insert(tk.END, "Placeholder: AI responses will appear here...\n\n")
         self.ai_output_box.config(state="disabled")
-        self.ai_output_box.pack(side="left", fill="both", expand=True)
+
+        # link scrollbar back to AI output box
+        ai_scroll.config(command=self.ai_output_box.yview)
+
+        # allow expansion inside container
+        ai_output_container.rowconfigure(0, weight=1)
+        ai_output_container.columnconfigure(0, weight=1)
 
         # enforce minimum window size after widgets load
         # locking in the size to never be smaller than the app content
@@ -376,22 +428,8 @@ class App:
         if not text:
             return  # user canceled
 
-        if entry_type == EntryType.Goal:
-            # create a GoalLog entry with default status
-            goal_log = GoalLog(entry_type, text)
-            self.service._state.entries[entry_type].append(goal_log)
-            self.service.write_log(goal_log)
-
-        elif entry_type == EntryType.Notes:
-            # create a ReflectionLog entry and run mood analysis
-            reflection_log = ReflectionLog(entry_type, text)
-            mood = self.analyze_mood(text)      # use the TextBlob helper
-            reflection_log.mood = mood          # save the detected mood
-            self.service._state.entries[entry_type].append(reflection_log)
-            self.service.write_log(reflection_log)
-        else:
-            # use normal service method (LearningLog)
-            self.service.set_entry(entry_type, text)
+        # sentiment for all entries
+        self.service.set_entry(entry_type, text)
 
         self.render_summary()
 
