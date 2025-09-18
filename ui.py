@@ -2,8 +2,8 @@
 ui.py
 Author: Matt Lindborg
 Course: MS548 - Advanced Programming Concepts and AI
-Assignment: Week 2 (prep for Week 3)
-Date: 9/17/2025
+Assignment: Week 2
+Date: 9/15/2025
 
 Purpose:
 This file defines the Tkinter-based graphical user interface (GUI)
@@ -21,12 +21,12 @@ This file does NOT contain data storage logic. Instead:
 
 # --- Imports ---
 import tkinter as tk
-from tkinter import messagebox, filedialog   # standard Tkinter dialogs
+from tkinter import filedialog   # standard Tkinter dialogs
 import json                                  # for save/load functionality
 from textblob import TextBlob                # sentiment analysis for Notes
 from service import LearnflowService         # service layer abstraction
 from domain import EntryType, GoalLog, ReflectionLog
-import csv
+import csv # excel file output
 
 
 class App:
@@ -47,13 +47,42 @@ class App:
         # configure window title and disable resizing
         self.root.title("Learnflow Base")
         self.root.resizable(False, False)
+        self.root.geometry("625x755") # hard coded to not waste space
+
+        # set base background and foreground
+        self.root.option_add("*Background", "#2b2b2b")      # dark gray background
+        self.root.option_add("*Foreground", "#ffffff")      # white text
+
+        # button colors
+        self.root.option_add("*Button.Background", "#444444")
+        self.root.option_add("*Button.Foreground", "#ffffff")
+        self.root.option_add("*Button.ActiveBackground", "#666666")
+        self.root.option_add("*Button.ActiveForeground", "#ffffff")
+
+        # entry box colors
+        self.root.option_add("*Entry.Background", "#1e1e1e")
+        self.root.option_add("*Entry.Foreground", "#dcdcdc")
+        self.root.option_add("*Entry.InsertBackground", "#ffffff")
+
+        # text box colors
+        self.root.option_add("*Text.Background", "#1e1e1e")
+        self.root.option_add("*Text.Foreground", "#dcdcdc")
+
+        # menu colors
+        self.root.option_add("*Menu.Background", "#2b2b2b")
+        self.root.option_add("*Menu.Foreground", "#ffffff")
+        self.root.option_add("*Menu.ActiveBackground", "#444444")
+        self.root.option_add("*Menu.ActiveForeground", "#ffffff")
+
+        # global font setting
+        default_font = ("Segoe UI", 10)
 
         # --- Main container frame ---
         main_frame = tk.Frame(root, padx=10, pady=10)
-        main_frame.grid(row=0, column=0, sticky="nsew")
-        main_frame.columnconfigure(0, weight=1)
+        main_frame.grid(row=0, column=0, sticky="nw")
+        #main_frame.columnconfigure(0, weight=1)
 
-        # --- Top row: welcome label + Clear button + Drop-down menu ---
+        # --- Top row: welcome label, Clear button, Drop-down menu ---
         top_frame = tk.Frame(main_frame)
         top_frame.grid(row=0, column=0, sticky="ew")
         top_frame.columnconfigure(0, weight=1)
@@ -62,7 +91,7 @@ class App:
         self.display_label = tk.Label(
             top_frame,
             text="Welcome to Learnflow\nPlease choose an option",
-            font=("Arial", 12),
+            font=("Georgia", 14),
             pady=2,
             justify="left",
         )
@@ -72,10 +101,10 @@ class App:
         self.summary_box = tk.Text(
             top_frame,
             height=4,
-            width=20,
+            width=40,
             wrap="word",
             state="disabled",
-            font=("Arial", 10)
+            font=default_font
         )
         self.summary_box.grid(row=0, column=2, padx=(5, 5), sticky="n")
 
@@ -83,28 +112,29 @@ class App:
         self.clear_button = tk.Button(
             top_frame, text="Clear", width=7, command=self.clear_entries
         )
-        self.clear_button.grid(row=0, column=1, sticky="w", padx=(5, 5))
+        self.clear_button.grid(row=0, column=1, sticky="w", padx=(5, 10))
 
-        # attach a menubar for Save/Load/Exit/History
+        # attach a menubar
         self.build_menu()
 
         # --- Middle row: buttons for Goal/Skill/Session/Notes ---
         middle_frame = tk.Frame(main_frame)
-        middle_frame.grid(row=1, column=0, sticky="nsew", pady=10)
+        middle_frame.grid(row=1, column=0, sticky="nsew", pady=5)
 
         # image on the left
         try:
             self.image = tk.PhotoImage(file="images\\image2_50pc.png")
             self.image_label = tk.Label(middle_frame, image=self.image)
-            self.image_label.pack(side="left", padx=(0, 15))
+            self.image_label.pack(side="left", padx=(0, 10))
         except Exception:
             # fail gracefully if image not found
             pass
 
-        # right frame with stacked buttons + log box
+        # right frame with stacked buttons and log box
         right_frame = tk.Frame(middle_frame)
         right_frame.pack(side="left", anchor="n")
 
+        # button frame
         buttons_frame = tk.Frame(right_frame)
         buttons_frame.pack(side="left", anchor="n", padx=(0, 5))
 
@@ -118,12 +148,30 @@ class App:
             ).pack(pady=2, anchor="w")
 
         # --- Bottom row: ai input and responses output box ---
-        ai_frame = tk.Frame(main_frame)
-        ai_frame.grid(row=3, column=0, sticky="ew", pady=(5, 10))
+        ai_frame = tk.Frame(main_frame) # llm not integrated yet
+        ai_frame.grid(row=3, column=0, sticky="ew", pady=(0, 5), padx=(0, 5))
 
-        # input field for user prompt to AI (placeholder only)
-        self.ai_entry = tk.Entry(ai_frame, width=60)
-        self.ai_entry.insert(0, "Placeholder: Type here for AI (future integration)")
+        # input field for user prompt to AI (currently placeholder)
+        self.ai_entry = tk.Entry(
+            ai_frame, 
+            width=60, 
+            font=default_font
+            )
+        self.ai_entry.insert(0, "Type your question for the AI here...")
+
+        # remove placeholder when clicking into the box
+        self.ai_entry.bind("<FocusIn>", self.clear_placeholder)
+
+        # restore placeholder if the box is empty when leaving it
+        #self.ai_entry.bind("<FocusOut>", self.restore_placeholder)
+
+        # pressing Enter should submit text
+        self.ai_entry.bind("<Return>", self.submit_ai_text)
+
+        # detect typing so we can shift focus logic if needed
+        self.ai_entry.bind("<KeyRelease>", self.focus_send_button)
+
+        # location in the frame
         self.ai_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
 
         # send button (currently only echoes placeholder response)
@@ -134,27 +182,34 @@ class App:
         )
         self.ai_send_button.pack(side="right")
 
+        # ai ouptut frame
+        ai_output_frame = tk.Frame(main_frame)
+        ai_output_frame.grid(row=4, column=0, sticky="w", pady=(2, 0))
+
         # output box for AI responses
         self.ai_output_box = tk.Text(
-            main_frame,
+            ai_output_frame,
+            width=86,
             height=6,
             wrap="word",
-            state="normal"
+            state="normal",
+            font=default_font
         )
-        self.ai_output_box.insert("1.0", "Placeholder: AI responses will appear here (future integration)")
+        self.ai_output_box.insert(tk.END, "Placeholder: AI responses will appear here...\n\n")
         self.ai_output_box.config(state="disabled")
-        self.ai_output_box.grid(row=4, column=0, sticky="ew")
+        self.ai_output_box.pack(side="left", fill="both", expand=True)
 
         # enforce minimum window size after widgets load
-        self.root.update_idletasks()
-        self.root.minsize(self.root.winfo_width(), self.root.winfo_height())
+        # locking in the size to never be smaller than the app content
+        #self.root.update_idletasks()
+        #self.root.minsize(self.root.winfo_width(), self.root.winfo_height())
 
         # initial render from service
         self.render_summary()
 
     # ------------------- VIEW HELPERS -------------------
 
-    def custom_input(self, title: str, prompt: str) -> str | None:
+    def custom_input_popup(self, title: str, prompt: str) -> str | None:
         """
         Custom popup dialog for text input.
         Reused by button handlers to collect user entries.
@@ -165,8 +220,8 @@ class App:
         # calculate centered popup position relative to root window
         self.center_popup(popup, 300, 150)
 
-        # add label + entry box
-        tk.Label(popup, text=prompt, font=("Arial", 12)).pack(pady=10)
+        # add label and entry box
+        tk.Label(popup, text=prompt, font=("Segoe UI", 9)).pack(pady=10)
         entry = tk.Entry(popup, width=40)
         entry.pack(pady=5)
         entry.focus_set()
@@ -181,6 +236,61 @@ class App:
         popup.bind("<Return>", on_ok)
         self.root.wait_window(popup)
         return result["value"]
+    
+    def custom_message_popup(self, title: str, message: str, msg_type: str = "info"):
+        """
+        Custom message popup to replace default messagebox dialogs.
+        - title: window title text
+        - message: main message content
+        - msg_type: "info", "error", "warning" (affects color scheme)
+        """
+
+        # create a popup window
+        popup = tk.Toplevel(self.root)
+        popup.title(title)
+
+        # center popup relative to main window
+        self.center_popup(popup, 300, 150)
+
+        # choose colors based on message type
+        if msg_type == "error":
+            bg_color = "#5c2b2b"
+            fg_color = "#ffcccc"
+        elif msg_type == "warning":
+            bg_color = "#5c5c2b"
+            fg_color = "#ffffcc"
+        else:  # info
+            bg_color = "#2b2b2b"
+            fg_color = "#ffffff"
+
+        popup.configure(bg=bg_color)
+
+        # label for message text
+        label = tk.Label(
+            popup,
+            text=message,
+            bg=bg_color,
+            fg=fg_color,
+            wraplength=260,
+            font=("Segoe UI", 9)
+        )
+        label.pack(pady=15, padx=10)
+
+        # ok button to close popup
+        ok_button = tk.Button(
+            popup,
+            text="OK",
+            bg="#444444",
+            fg="#ffffff",
+            activebackground="#666666",
+            activeforeground="#ffffff",
+            command=popup.destroy
+        )
+        ok_button.pack(pady=10)
+
+        # focus button and allow Enter key to close
+        ok_button.focus_set()
+        popup.bind("<Return>", lambda event=None: popup.destroy())
 
     def render_summary(self) -> None:
         """
@@ -195,6 +305,62 @@ class App:
             self.summary_box.insert(tk.END, f"{val}\n")
         self.summary_box.config(state="disabled")
 
+    def clear_placeholder(self, event):
+        """
+        Remove placeholder text when user clicks into the entry box.
+        """
+        if self.ai_entry.get().strip() == "Type your question for the AI here...":
+            self.ai_entry.delete(0, tk.END)
+            self.ai_entry.unbind("<FocusIn>")
+
+    '''def restore_placeholder(self, event):
+        """
+        Restore placeholder text if user leaves the box empty.
+        """
+        if not self.ai_entry.get().strip():
+            self.ai_entry.insert(0, "Type your question for the AI here...")'''
+
+    def submit_ai_text(self, event=None):
+        """
+        Handle AI entry submission:
+        - Append text into the AI output box
+        - Append placeholder AI response
+        - Keep placeholder behavior intact
+        """
+        user_input = self.ai_entry.get().strip()
+
+        # ignore if placeholder or empty
+        if not user_input or user_input == "Type your question for the AI here...":
+            return
+
+        # insert into output box (below existing placeholder message)
+        self.ai_output_box.config(state="normal")
+        self.ai_output_box.insert(tk.END, f"You: {user_input}\n")
+
+        # insert a fake AI response placeholder
+        self.ai_output_box.insert(tk.END, "AI: (placeholder response)\n\n")
+
+        # scroll to bottom and lock text box again
+        self.ai_output_box.see(tk.END)
+        self.ai_output_box.config(state="disabled")
+
+        # clear entry box and reset placeholder
+        self.ai_entry.delete(0, tk.END)
+        #self.restore_placeholder(None)
+
+        # shift focus to the Send button after submit
+        self.ai_entry.focus_set()
+
+    def focus_send_button(self, event):
+        """
+        If the user has started typing real text,
+        keep focus in the entry box until Enter is pressed.
+        """
+        current_text = self.ai_entry.get().strip()
+        if current_text and current_text != "Type your question for the AI here...":
+            # Keep focus in the entry so user can continue typing
+            self.ai_entry.focus_set()
+
     # ------------------- EVENT HANDLERS -------------------
     def on_add_or_edit_entry(self, entry_type: EntryType):
         """
@@ -206,25 +372,25 @@ class App:
             - Otherwise → use normal LearningLog via service.
             - Re-render summary output.
         """
-        text = self.custom_input("Input", f"Enter your {entry_type.value}:")
+        text = self.custom_input_popup("Input", f"Enter your {entry_type.value}:")
         if not text:
             return  # user canceled
 
         if entry_type == EntryType.Goal:
-            # Create a GoalLog entry with default status
+            # create a GoalLog entry with default status
             goal_log = GoalLog(entry_type, text)
             self.service._state.entries[entry_type].append(goal_log)
             self.service.write_log(goal_log)
 
         elif entry_type == EntryType.Notes:
-            # Create a ReflectionLog entry and run mood analysis
+            # create a ReflectionLog entry and run mood analysis
             reflection_log = ReflectionLog(entry_type, text)
-            reflection_log.analyze_mood()
+            mood = self.analyze_mood(text)      # use the TextBlob helper
+            reflection_log.mood = mood          # save the detected mood
             self.service._state.entries[entry_type].append(reflection_log)
             self.service.write_log(reflection_log)
-
         else:
-            # Fallback: use normal service method (LearningLog)
+            # use normal service method (LearningLog)
             self.service.set_entry(entry_type, text)
 
         self.render_summary()
@@ -235,7 +401,7 @@ class App:
         """
         self.service.clear()
         self.render_summary()
-        messagebox.showinfo("Cleared", "All entries have been cleared.")
+        self.custom_message_popup("Cleared", "All entries have been cleared.", msg_type="info")
 
     def display_ai_response(self, user_input: str):
         """
@@ -322,7 +488,7 @@ class App:
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(export_dict, f, indent=4)
 
-        messagebox.showinfo("Saved", f"Entries saved to {file_path}")
+        self.custom_message_popup("Saved", f"Entries saved to {file_path}", msg_type="info")
 
     def load_entries(self):
         """
@@ -365,10 +531,10 @@ class App:
                     self.service._state.entries[etype].append(entry)
 
             self.render_summary()
-            messagebox.showinfo("Loaded", f"Entries loaded from {file_path}")
+            self.custom_message_popup("Loaded", f"Entries loaded from {file_path}", msg_type="info")
 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load entries:\n{e}")
+            self.custom_message_popup("Error", "Failed to load file!", msg_type="error")
 
     def show_history(self):
         """
@@ -417,14 +583,22 @@ class App:
         Center any popup relative to the main app window.
         """
         self.root.update_idletasks()
+
+        # grab the info for the root frame
         main_x = self.root.winfo_x()
         main_y = self.root.winfo_y()
         main_w = self.root.winfo_width()
         main_h = self.root.winfo_height()
 
+        # calculate horizontal offset: start from the root x position,
+        # then add half the root width, and subtract half the popup width
         pos_x = main_x + (main_w // 2) - (width // 2)
+
+        # calculate vertical offset: start from the root y position,
+        # then add half the root height, and subtract half the popup height
         pos_y = main_y + (main_h // 2) - (height // 2)
 
+        # apply the new location for the popup by changing it's geometry
         popup.geometry(f"{width}x{height}+{pos_x}+{pos_y}")
 
     def export_csv(self):
@@ -445,7 +619,6 @@ class App:
         from domain import GoalLog, ReflectionLog
 
         with open(file_path, "w", newline="", encoding="utf-8") as f:
-            import csv
             writer = csv.writer(f)
 
             # Write header row
@@ -470,7 +643,7 @@ class App:
                         mood,
                         status
                     ])
-        messagebox.showinfo("Exported", f"Entries exported to {file_path}")
+        self.custom_message_popup("Exported", f"Entries exported to {file_path}", msg_type="info")
 
 
     # ------------------- UTILITIES -------------------

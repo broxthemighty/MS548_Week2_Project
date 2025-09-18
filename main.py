@@ -2,8 +2,8 @@
 main.py
 Author: Matt Lindborg
 Course: MS548 - Advanced Programming Concepts and AI
-Assignment: Week 2 (prep for Week 3)
-Date: 9/17/2025
+Assignment: Week 2
+Date: 9/15/2025
 
 Purpose:
 This is the entry point for the Learnflow Base application.
@@ -12,13 +12,12 @@ The structure follows best practices:
     - Keep main.py minimal (only startup logic).
     - Delegate business logic to service.py.
     - Delegate GUI rendering to ui.py.
-This ensures the application remains modular, testable, and extendable.
 """
 
 # --- Imports ---
 import tkinter as tk                  # Tkinter for GUI window creation
 from service import LearnflowService  # Service layer for business logic
-from ui import App                    # GUI class that builds interface
+from ui import App                    # GUI class
 
 
 def main():
@@ -27,19 +26,19 @@ def main():
     Creates the root Tkinter window, service instance, and App GUI.
     Starts the event loop to keep the program running until exit.
     """
-    # Step 1: create root Tkinter window
+    # create root Tkinter window
     root_window = tk.Tk()
 
-    # Step 2: create service instance (manages state + logs)
+    # create service instance
     service = LearnflowService()
 
-    # Step 3: build GUI, passing in root window + service
+    # build GUI, passing in root window and service args
     app = App(root_window, service)
 
-    # Step 4: enter Tkinter event loop (blocks until window closed)
+    # enter Tkinter event loop 
     root_window.mainloop()
 
 
-# Python standard entry-point guard
+# Python standard entry-point
 if __name__ == "__main__":
     main()

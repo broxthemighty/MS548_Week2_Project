@@ -92,20 +92,6 @@ class ReflectionLog(LearningLog):
     Unique methods:
         - analyze_mood(): run sentiment analysis (TextBlob).
     """
-    def analyze_mood(self) -> str:
-        """
-        Analyze mood from text using TextBlob sentiment polarity.
-        Returns a label: motivated, stuck, or neutral.
-        """
-        from textblob import TextBlob  # imported here to avoid circular issues
-        polarity = TextBlob(self.text).sentiment.polarity
-        if polarity > 0.3:
-            self.mood = "motivated"
-        elif polarity < -0.3:
-            self.mood = "stuck"
-        else:
-            self.mood = "neutral"
-        return self.mood
 
 @dataclass
 class LearnflowState:

@@ -2,8 +2,8 @@
 tests/test_service.py
 Author: Matt Lindborg
 Course: MS548 - Advanced Programming Concepts and AI
-Assignment: Week 2 (prep for Week 3)
-Date: 9/17/2025
+Assignment: Week 2
+Date: 9/16/2025
 
 Purpose:
 This file contains unit tests for the LearnflowService class.
@@ -12,8 +12,7 @@ Testing goals:
     - Confirm that multiple entries are stored (append behavior).
     - Ensure the summary method returns only the latest entry.
     - Confirm clear() resets state.
-These tests are written with unittest, which is included in Python’s
-standard library and commonly used in academic + professional projects.
+These tests are written with unittest.
 """
 
 import unittest
@@ -24,7 +23,7 @@ from service import LearnflowService        # Business logic
 class TestLearnflowService(unittest.TestCase):
     """
     Unit tests for LearnflowService.
-    Each test is independent (fresh instance created).
+    Each test is independent with a separate instance of the class in each.
     """
 
     def test_set_and_summary(self):
@@ -32,7 +31,7 @@ class TestLearnflowService(unittest.TestCase):
         GIVEN: A new service instance
         WHEN: Adding Goal and Notes entries
         THEN: summary() should return latest entries for each type
-              and omit types without entries.
+              and ignore types without entries.
         """
         s = LearnflowService()
         s.set_entry(EntryType.Goal, "Finish Week 1")
@@ -40,13 +39,13 @@ class TestLearnflowService(unittest.TestCase):
 
         summary = s.summary()
 
-        # Check summary contains latest values
+        # check summary contains latest values
         self.assertIn("Goal", summary)
         self.assertTrue(summary["Goal"].startswith("Goal: Finish Week 1"))
         self.assertIn("Notes", summary)
         self.assertTrue(summary["Notes"].startswith("Notes: Focus on Tkinter"))
 
-        # Skill should not appear because nothing was logged
+        # skill should not appear because nothing was logged
         self.assertNotIn("Skill", summary)
 
     def test_clear(self):
@@ -58,13 +57,13 @@ class TestLearnflowService(unittest.TestCase):
         s = LearnflowService()
         s.set_entry(EntryType.Skill, "Python")
 
-        # Ensure something is stored before clearing
+        # make sure something is stored before clearing
         self.assertEqual(s.get_entry(EntryType.Skill), "Python")
 
-        # Clear all entries
+        # clear all entries
         s.clear()
 
-        # After clear, no entries should remain
+        # after clear, no entries should remain
         self.assertEqual(s.get_entry(EntryType.Skill), "")
 
     def test_multiple_entries_append(self):
@@ -78,10 +77,10 @@ class TestLearnflowService(unittest.TestCase):
         s.set_entry(EntryType.Goal, "First Goal")
         s.set_entry(EntryType.Goal, "Second Goal")
 
-        # Access snapshot (deep copy of state) for inspection
+        # access snapshot (a deep copy of state) for inspection
         history = s.snapshot().entries
 
-        # Verify both entries are stored as LearningLog objects
+        # verify both entries are stored as LearningLog objects
         self.assertEqual(len(history[EntryType.Goal]), 2) # both entries should be stored
         self.assertEqual(history[EntryType.Goal][0].text, "First Goal")
         self.assertEqual(history[EntryType.Goal][1].text, "Second Goal")
@@ -95,6 +94,6 @@ class TestLearnflowService(unittest.TestCase):
         self.assertTrue(summary["Goal"].startswith("Goal: Second Goal"))
 
 
-# Python standard entry-point for running tests directly
+# python standard entry-point for running tests
 if __name__ == "__main__":
     unittest.main()
