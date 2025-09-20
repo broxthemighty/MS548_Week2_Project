@@ -23,7 +23,59 @@ from typing import Optional, Dict                          # type hinting for cl
 from copy import deepcopy                                  # for safe state snapshot
 from domain import EntryType, LearnflowState, LearningLog  # import domain model classes
 from textblob import TextBlob                              # import for sentiment analysis
+import pyttsx3
 
+# --- Lightweight “assistant” logic and optional TTS ---
+class ResponseEngine:
+    """
+    Very small rules-based responder for the placeholder AI chat.
+    Keeps UI free of this logic so a mobile UI can reuse the same behavior.
+    """
+    def __init__(self):
+        # simple keyword→response map; everything else falls back to a generic line
+        self.rules = {
+            "hello": "Hello! How can I help with your learning today?",
+            "hi": "Hi there! What would you like to work on?",
+            "goal": "Try breaking your goal into a next action you can do today.",
+            "stuck": "When you feel stuck, write one tiny step and do just that.",
+            "git": "Tip: practice Git with a scratch repo; commit early and often.",
+        }
+        self.default = "I have a limited number of responses right now, but I’m listening."
+
+    def reply(self, user_text: str) -> str:
+        q = (user_text or "").strip().lower()
+        for key, val in self.rules.items():
+            if key in q:
+                return val
+        return self.default
+
+class TTSService:
+    """
+    Optional text-to-speech. No-ops cleanly if pyttsx3 is not installed.
+    Kept here (service layer) so UI can be swapped later (desktop/mobile/web).
+    """
+    def __init__(self, enabled: bool = True):
+        self.enabled = enabled
+        self._ready = False
+        try:
+            import pyttsx3  # local import to avoid a hard dependency at import time
+            self._engine = pyttsx3.init()
+            # tune defaults if desired:
+            # self._engine.setProperty("rate", 185)
+            # self._engine.setProperty("volume", 1.0)
+            self._ready = True
+        except Exception:
+            self._engine = None  # graceful fallback
+
+    def set_enabled(self, on: bool) -> None:
+        self.enabled = bool(on)
+
+    def speak(self, text: str) -> None:
+        if not (self.enabled and self._ready and self._engine and text):
+            return
+        self._engine.stop()
+        self._engine.say(text)
+        self._engine.runAndWait()
 
 class LearnflowService:
     """
@@ -37,6 +89,8 @@ class LearnflowService:
         or creates a new empty LearnflowState if none provided.
         """
         self._state = state or LearnflowState()
+        self.responses = ResponseEngine()  # simple rules-based replies
+        self.tts = TTSService(enabled=True)  # audio on by default
 
     # ------------------- COMMANDS (Mutate State) -------------------
 
@@ -117,6 +171,12 @@ class LearnflowService:
         """
         return deepcopy(self._state)
 
+    # ------------------- HELPER FUNCTIONS -------------------
+
+    def speak_if_enabled(self, text: str) -> None:
+        """Speak a line through TTS if the user has audio enabled."""
+        self.tts.speak(text)
+    
     # ------------------- PLACEHOLDERS (Future Features) -------------------
 
     def write_log(self, record: "LearningLog"):

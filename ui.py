@@ -119,6 +119,9 @@ class App:
         summary_container = tk.Frame(top_frame)
         summary_container.grid(row=0, column=2, padx=(5, 5), sticky="n")
 
+        # small gutter so the outer size doesn’t change when the scrollbar hides/shows
+        summary_container.columnconfigure(1, minsize=14)
+
         # auto-hiding vertical scrollbar for the summary box
         summary_scroll = AutoScrollbar(summary_container, orient="vertical")
         summary_scroll.grid(row=0, column=1, sticky="ns")
@@ -219,6 +222,9 @@ class App:
         # ai ouptut frame
         ai_output_frame = tk.Frame(main_frame)
         ai_output_frame.grid(row=4, column=0, sticky="w", pady=(2, 0))
+
+        # keep container width stable when scrollbar toggles
+        ai_output_container.columnconfigure(1, minsize=14)
 
         # container frame for AI output text + scrollbar
         ai_output_container = tk.Frame(ai_output_frame)
