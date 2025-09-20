@@ -223,12 +223,12 @@ class App:
         ai_output_frame = tk.Frame(main_frame)
         ai_output_frame.grid(row=4, column=0, sticky="w", pady=(2, 0))
 
-        # keep container width stable when scrollbar toggles
-        ai_output_container.columnconfigure(1, minsize=14)
-
         # container frame for AI output text + scrollbar
         ai_output_container = tk.Frame(ai_output_frame)
         ai_output_container.pack(fill="both", expand=True)
+
+        # keep container width stable when scrollbar toggles
+        ai_output_container.columnconfigure(1, minsize=6)
 
         # auto-hiding vertical scrollbar for AI output
         ai_scroll = AutoScrollbar(ai_output_container, orient="vertical")
